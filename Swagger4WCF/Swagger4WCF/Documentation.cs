@@ -43,7 +43,8 @@ namespace Swagger4WCF
             {
                 var _name = _member.Attribute("name").Value;
                 this.m_Dictionary.Add(_name, Documentation.Arrange(_member.Element("summary").Value));
-                if (_name.StartsWith("M:"))
+                if (_name.StartsWith("M:")
+                    && !_name.Contains(".#ctor")) // ctor: '"M:GuestWebservice.Contracts.GuestInfo.#ctor"'
                 {
                     this.m_Dictionary.Add(string.Concat("R", _name.Substring(1)), Documentation.Arrange(_member.Element("returns").Value));
                     foreach (var _parameter in _member.Elements("param"))
