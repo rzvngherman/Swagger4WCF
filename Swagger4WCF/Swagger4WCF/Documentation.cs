@@ -41,7 +41,7 @@ namespace Swagger4WCF
         {
             foreach (var _member in XDocument.Load(location).Descendants("member"))
             {
-                var _name = _member.Attribute("name").Value;
+                var _name = _member.Attribute("name").Value;                
                 this.m_Dictionary.Add(_name, Documentation.Arrange(_member.Element("summary").Value));
                 if (_name.StartsWith("M:")
                     && !_name.Contains(".#ctor")) // ctor: '"M:GuestWebservice.Contracts.GuestInfo.#ctor"'

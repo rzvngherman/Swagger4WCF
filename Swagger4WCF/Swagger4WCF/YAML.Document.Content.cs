@@ -53,81 +53,107 @@ namespace Swagger4WCF
                     //using (new Block(this)) { this.Add("- application/json"); }
                     this.Add("paths:");
                     var _methods = type.Methods
-                        .Where(_Method => _Method.IsPublic && !_Method.IsStatic && _Method.GetCustomAttribute<OperationContractAttribute>() != null)
-                        .OrderBy(_Method => _Method.MetadataToken.ToInt32()).ToArray();
+                        .Where(_Method => 
+                                _Method.IsPublic 
+                                && !_Method.IsStatic 
+                                && _Method.GetCustomAttribute<OperationContractAttribute>() != null)
+                        .OrderBy(_Method => _Method.MetadataToken.ToInt32())
+                        .ToArray();
 
                     System.Collections.Generic.List<TypeDefinition> requestDefinitions = new System.Collections.Generic.List<TypeDefinition>();
 
                     using (new Block(this))
-                    {
+                    {   
                         foreach (var _method in _methods)
                         {
-                            this.Add(_method, documentation);
+                                var parameters = _method.Parameters;
+                                // var _type = parameter.ParameterType;
+                                foreach (var parameter in parameters)
+                                {
+                                    var type1 = parameter.ParameterType;
+                                    var resolver = type1.Resolve();
+                                    if (!requestDefinitions.Contains(resolver))
+                                        requestDefinitions.Add(resolver);
+                                }
 
-                            //prepare Request model for "definitions:"
-                            var parameters = _method.Parameters;
-                            foreach (var parameter in parameters)
-                            {
-                                var type1 = parameter.ParameterType;
-                                var resolver = type1.Resolve();
-                                if (!requestDefinitions.Contains(resolver))
-                                    requestDefinitions.Add(resolver);
-                            }
+                            this.Add(_method, documentation);
                         }
                     }
                     this.Add("definitions:");
                     using (new Block(this))
                     {
-                        foreach (var _response in _methods.Select(_Method => _Method.ReturnType)
-                                                            .Distinct().OrderBy(_Type => _Type.Name)
-                                                            .Where(_Type => 
-                                                                !(_Type.Resolve() == _Type.Resolve().Module.Import(typeof(void)).Resolve()) 
-                                                                && !(_Type.Resolve() == _Type.Resolve().Module.Import(typeof(bool)).Resolve()) 
-                                                                && !(_Type.Resolve() == _Type.Resolve().Module.Import(typeof(string)).Resolve()) 
-                                                                && !(_Type.Resolve() == _Type.Resolve().Module.Import(typeof(int)).Resolve()) 
-                                                                && !(_Type.Resolve() == _Type.Resolve().Module.Import(typeof(long)).Resolve()) 
-                                                                && !(_Type.Resolve() == _Type.Resolve().Module.Import(typeof(DateTime)).Resolve()))
-                                                            .Select(_Type => _Type.IsArray ? _Type.GetElementType() : _Type)
-                                                            .Distinct())
+                        var methods = _methods.Select(_Method => _Method.ReturnType)
+                                           .Distinct()
+                                           .OrderBy(_Type => _Type.Name)
+                                           .Where(_Type =>
+                                               !(_Type.Resolve() == _Type.Resolve().Module.Import(typeof(void)).Resolve())
+                                               && !(_Type.Resolve() == _Type.Resolve().Module.Import(typeof(bool)).Resolve())
+                                               && !(_Type.Resolve() == _Type.Resolve().Module.Import(typeof(string)).Resolve())
+                                               && !(_Type.Resolve() == _Type.Resolve().Module.Import(typeof(int)).Resolve())
+                                               && !(_Type.Resolve() == _Type.Resolve().Module.Import(typeof(long)).Resolve())
+                                               && !(_Type.Resolve() == _Type.Resolve().Module.Import(typeof(DateTime)).Resolve()))
+                                           .Select(_Type => _Type.IsArray ? _Type.GetElementType() : _Type).Distinct();
+                        var methodLists = methods.ToList();
+                        foreach (var _response in methods)
                         {
                             if (_response.Resolve() == _response.Module.Import(typeof(void)).Resolve()) { throw new NotSupportedException("Type 'System.Void' is not supported as return type."); }
                             if (_response.Resolve().GetCustomAttribute<DataContractAttribute>() == null) { throw new NotSupportedException(string.Format("Type '{0}' is not a data contract.", _response.FullName)); }
 
-                            AddAllDefinitions(_response, documentation);
-
-                            if (requestDefinitions.Count > 0)
-                            {
-                                requestDefinitions.ForEach(rd =>
-                                {
-                                    //  GetGuestTransactionsRequest
-                                    AddAllDefinitions(rd, documentation);
-                                });
-                            }
+                            AddAllDefinitions(_response, documentation);                            
                         }
-                        //this.Add("Error:");
-                        //using (new Block(this))
-                        //{
-                        //    this.Add("type: object");
-                        //    this.Add("properties:");
-                        //    using (new Block(this))
-                        //    {
-                        //        this.Add("Code:");
-                        //        using (new Block(this))
-                        //        {
-                        //            this.Add("type: string");
-                        //            this.Add("description: Code");
-                        //        }
-                        //        this.Add("Message:");
-                        //        using (new Block(this))
-                        //        {
-                        //            this.Add("type: string");
-                        //            this.Add("description: Message");
-                        //        }
-                        //    }
-                        //}
+
+                        if (requestDefinitions.Count > 0)
+                        {
+                            requestDefinitions.ForEach(rd =>
+                            {
+                                AddAllDefinitions(rd, documentation);
+                            });
+                        }
                     }
                 }
-                
+
+                private void AddAllDefinitions(TypeReference response, Documentation documentation)
+                {
+                    AddDefinitions(response, documentation);
+                    BuildListProperties(response, documentation);                    
+                }
+
+                private System.Collections.Generic.List<string> _alreadyAddedDefs = new System.Collections.Generic.List<string>();
+
+                private void BuildListProperties(TypeReference response, Documentation documentation)
+                {
+                    //old
+                    //BuildGenericListProperties(response, documentation);
+                    //BuildCommonProperties(response, documentation);
+
+
+                    //BuildGenericListProperties
+                    var genericList2 = response.GetGenericListProperties();
+                    var genericList = response.GetCommonProperties();
+
+                    var abc2 = genericList2.ToList();
+                    var tt2 = abc2.Count;
+
+                    var abc = genericList.ToList();
+                    var tt = abc.Count;
+
+                    //IOrderedEnumerable<PropertyDefinition> genericListAll
+                    var genericListAll = new System.Collections.Generic.List<PropertyDefinition>();
+                    genericListAll.AddRange(genericList2);
+                    genericListAll.AddRange(genericList);
+                    
+                    foreach (var pp in genericListAll)
+                    {
+                        //check if not already added
+                        if (!_alreadyAddedDefs.Contains(pp.PropertyType.FullName))
+                        {
+                            _alreadyAddedDefs.Add(pp.PropertyType.FullName);
+                            AddDefinitions(pp.PropertyType, documentation);
+                            BuildListProperties(pp.PropertyType, documentation);
+                        }
+                    }
+                }
+
                 private void Add(params string[] line)
                 {
                     this.m_Builder.AppendLine(this.m_Tabulation.ToString() + string.Concat(line));
@@ -181,7 +207,7 @@ namespace Swagger4WCF
                                 using (new Block(this))
                                 {
                                     if (documentation != null && documentation[method].Response != null) { this.Add("description: ", documentation[method].Response); }
-                                    else { this.Add("des: OK"); }
+                                    else { this.Add("description: OK"); }
                                     if (method.ReturnType.Resolve() != method.Module.Import(typeof(void)).Resolve())
                                     {
                                         this.Add("schema:");
@@ -292,6 +318,7 @@ namespace Swagger4WCF
                     }
                     else if (type.Resolve() == type.Module.Import(typeof(string)).Resolve())
                     {
+                        //  allowedValues: array, boolean, integer, null, number, object, string
                         this.Add("type: \"string\"");
                         this.Add("format: date-time");
                     }
@@ -330,12 +357,23 @@ namespace Swagger4WCF
                     {
                         if (type.IsGenericInstance)
                         {
-                            var typeName = type.GetReflectionName();
-                            this.Add("$ref: \"#/definitions/", typeName, "\"");
+                            var abc4 = type.GetReflectionName();
+                            this.Add("$ref: \"#/definitions/", abc4, "\"");
                         }
                         else
                         {
-                            if (type.Resolve().GetCustomAttribute<DataContractAttribute>() == null) { throw new NotSupportedException(string.Format("Type '{0}' is not a data contract.", type.FullName)); }
+                            var abc = type.Resolve();
+                            var abc2 = type.GetElementType();
+                            var abc3 = type.Namespace;
+                            //  abc = {WcfService1.CompositeType}
+                            //  abc = {System.Collections.Generic.List`1}
+
+                            var props = type.Resolve().Properties.ToList();
+                            //.Where(_Property => _Property.GetCustomAttribute<DataMemberAttribute>() != null).ToList();
+                            if (type.Resolve().GetCustomAttribute<DataContractAttribute>() == null)
+                            {
+                                throw new NotSupportedException(string.Format("Type '{0}' is not a data contract.", type.FullName));
+                            }
                             this.Add("$ref: \"#/definitions/", type.Name, "\"");
                         }
                     }
@@ -344,26 +382,6 @@ namespace Swagger4WCF
                 override public string ToString()
                 {
                     return this.m_Builder.ToString();
-                }
-
-                private System.Collections.Generic.List<string> _alreadyAddedDefs2 = new System.Collections.Generic.List<string>();
-
-                private void AddAllDefinitions(TypeReference response, Documentation documentation)
-                {
-                    //GetGuestTransactionsRequest
-                    var rr = response.Resolve();
-                    //  rr.FullName = "GuestWebservice.Contracts.GetGuestTransactionsRequest"
-                    if (rr.FullName == "GuestWebservice.Contracts.GetGuestTransactionsRequest")
-                    {
-
-                    }
-
-                    if (!_alreadyAddedDefs2.Contains(rr.FullName))
-                    {
-                        _alreadyAddedDefs2.Add(rr.FullName);
-                        AddDefinitions(response, documentation);
-                    }
-                    BuildListProperties(response, documentation);
                 }
 
                 private void AddDefinitions(TypeReference _response, Documentation documentation)
@@ -395,39 +413,39 @@ namespace Swagger4WCF
                     }
                 }
 
-                private System.Collections.Generic.List<string> _alreadyAddedDefs = new System.Collections.Generic.List<string>();
-
-                private void BuildListProperties(TypeReference response, Documentation documentation)
+                private void BuildGenericListProperties(TypeReference response, Documentation documentation)
                 {
-                    //GetGuestTransactionsRequest
+                    //new: add generic list
+                    var genericList = response.GetGenericListProperties();
+                    var abc2 = genericList.ToList();
+                    var tt = abc2.Count;
 
-                    var genericList2 = response.GetGenericListProperties();
+                    foreach (var pp in genericList)
+                    {
+                        AddDefinitions(pp.PropertyType, documentation);
+
+                        BuildGenericListProperties(pp.PropertyType, documentation);
+                    }
+                }
+                
+                private void BuildCommonProperties(TypeReference response, Documentation documentation)
+                {
+                    //new: add generic list
                     var genericList = response.GetCommonProperties();
+                    var abc2 = genericList.ToList();
+                    var tt = abc2.Count;
 
-                    var abc2 = genericList2.ToList();
-                    var tt2 = abc2.Count;
-
-                    var abc = genericList.ToList();
-                    var tt = abc.Count;
-
-                    //IOrderedEnumerable<PropertyDefinition> genericListAll
-                    var genericListAll = new System.Collections.Generic.List<PropertyDefinition>();
-                    genericListAll.AddRange(genericList2);
-                    genericListAll.AddRange(genericList);
-
-                    foreach (var pp in genericListAll)
+                    foreach (var pp in genericList)
                     {
                         //check if not already added
-                        if(pp.PropertyType.FullName == "GuestWebservice.Contracts.GetGuestTransactionsRequest")
-                        {
-
-                        }
                         if (!_alreadyAddedDefs.Contains(pp.PropertyType.FullName))
                         {
                             _alreadyAddedDefs.Add(pp.PropertyType.FullName);
                             AddDefinitions(pp.PropertyType, documentation);
-                            BuildListProperties(pp.PropertyType, documentation);
+                            BuildCommonProperties(pp.PropertyType, documentation);
                         }
+                        //AddDefinitions(pp.PropertyType, documentation);
+                        //BuildCommonProperties(pp.PropertyType, documentation);
                     }
                 }
             }
@@ -481,6 +499,7 @@ namespace Swagger4WCF
                 prps = type.Resolve().Properties;
             }
 
+
             var abc2 = prps.ToList();
 
             // get only generic properties
@@ -496,25 +515,30 @@ namespace Swagger4WCF
 
             return properties;
         }
-
-        private static string GetReflectionName(this TypeReference type)
+        private static IOrderedEnumerable<PropertyDefinition> GetCustomAttributeProperties(this TypeReference type)
         {
+            Mono.Collections.Generic.Collection<PropertyDefinition> prps = null;
             if (type.IsGenericInstance)
             {
-                var genericInstance = (GenericInstanceType)type;
-                var abc = genericInstance.GenericArguments.Select(p => p.GetReflectionName()).ToArray();
+                var prps2 = (type as GenericInstanceType).GenericArguments.ToList();
 
-                var abc2 = string.Format("{0}.{1}[{2}]",
-                    genericInstance.Namespace,
-                    type.Name,
-                    String.Join(",", abc));
-                //var ttt = Type.GetType(abc2, true);
+                prps = (type as GenericInstanceType).GenericArguments.First()
+                            .GetElementType().Resolve().Properties;
 
-
-                return string.Format("{0}",
-                        String.Join(",", abc));
             }
-            return type.Name;
+            else
+            {
+                prps = type.Resolve().Properties;
+            }
+            var abc2 = prps.ToList();
+
+            var properties = prps
+                                .Where(_Property => _Property.GetCustomAttribute<DataMemberAttribute>() != null)
+                                .OrderBy(_Property => _Property.MetadataToken.ToInt32());
+
+            var abc = properties.ToList();
+
+            return properties;
         }
 
         private static TypeDefinition GetMethodDefinition(this TypeReference type)
@@ -551,30 +575,24 @@ namespace Swagger4WCF
             return rrr;
         }
 
-        private static IOrderedEnumerable<PropertyDefinition> GetCustomAttributeProperties(this TypeReference type)
+        private static string GetReflectionName(this TypeReference type)
         {
-            Mono.Collections.Generic.Collection<PropertyDefinition> prps = null;
             if (type.IsGenericInstance)
             {
-                var prps2 = (type as GenericInstanceType).GenericArguments.ToList();
+                var genericInstance = (GenericInstanceType)type;
+                var abc = genericInstance.GenericArguments.Select(p => p.GetReflectionName()).ToArray();
 
-                prps = (type as GenericInstanceType).GenericArguments.First()
-                            .GetElementType().Resolve().Properties;
+                var abc2 = string.Format("{0}.{1}[{2}]",
+                    genericInstance.Namespace,
+                    type.Name,
+                    String.Join(",", abc));
+                //var ttt = Type.GetType(abc2, true);
 
+
+                return string.Format("{0}",
+                        String.Join(",", abc));
             }
-            else
-            {
-                prps = type.Resolve().Properties;
-            }
-            var abc2 = prps.ToList();
-
-            var properties = prps
-                                .Where(_Property => _Property.GetCustomAttribute<DataMemberAttribute>() != null)
-                                .OrderBy(_Property => _Property.MetadataToken.ToInt32());
-
-            var abc = properties.ToList();
-
-            return properties;
+            return type.Name;
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using Mono.Cecil;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -11,6 +12,8 @@ namespace Swagger4WCF
     {
         static void Main(string[] args)
         {
+            args = BuildArgs();
+
             var _directory = Path.GetDirectoryName(args[4]);
             var _name = Path.GetFileNameWithoutExtension(args[1]);
             var _resolver = new DefaultAssemblyResolver();
@@ -28,6 +31,20 @@ namespace Swagger4WCF
                     }
                 }
             }
+        }
+
+        private static string[] BuildArgs()
+        {
+            var res = new List<string>();
+
+            //GuestWebService
+            res.Add("");
+            res.Add(@"D:\m\git\holland-casino\GuestWebService\GuestWebservice\GuestWebservice.csproj"); //[1]
+            res.Add(""); //[2]
+            res.Add(""); //[3]
+            res.Add(@"D:\m\git\holland-casino\GuestWebService\GuestWebservice\bin\GuestWebservice.dll"); //[4]
+
+            return res.ToArray();
         }
     }
 }
